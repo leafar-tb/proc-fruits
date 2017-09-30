@@ -6,7 +6,7 @@ import random
 from math import pi as PI
 from mathutils import Vector
 from .spline import HermiteInterpolator, screw
-from .util import optional, makeDiffuseMaterial, mergeMeshPydata
+from .util import optional, makeDiffuseMaterial, MeshMerger
 from .evolution import Evolvable
 from .notnum import linspace
 
@@ -156,22 +156,12 @@ class Fruit(Evolvable, FruitProperties):
         It is usually called through Evolvable.toMeshObject, which does some decoration.
         """
         
-        verts, faces = mergeMeshPydata(
-            screw(self._outerSpline(), LODr=10, LODp=LOD, rScale=lambda a: (math.sin(self.symmetry*a)+2)/2),
-            self._makeFlowerResidue()
-        )
+        mm = MeshMerger()
+        mm.add(*screw(self._outerSpline(), LODr=10, LODp=LOD, rScale=lambda a: (math.sin(self.symmetry*a)+2)/2), 
+             makeDiffuseMaterial(self.colour))
+        mm.add(*self._makeFlowerResidue(), makeDiffuseMaterial([.12,.06,0]))
         
-        newMesh = bpy.data.meshes.new("Fruit")
-        newMesh.from_pydata(verts, [], faces)
-        newMesh.update()
-        
-        # add some colour, why not?
-        newMesh.materials.append(makeDiffuseMaterial(self.colour))
-        newMesh.materials.append(makeDiffuseMaterial([1,1,0]))
-        for p in range(len(faces)):
-                newMesh.polygons[p].material_index = 0
-        
-        return newMesh
+        return mm.buildMesh("Fruit")
 
 #############################################
 
