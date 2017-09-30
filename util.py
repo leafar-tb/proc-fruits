@@ -64,6 +64,37 @@ def mergeMeshPydata(*args):
             result[i].extend( [idx+offset for idx in idxtup] for idxtup in tup[i] )
     return result
 
+class MeshMerger:
+    """
+    Combine meshes that are present as vertex and face lists (see bpy.types.Mesh.from_pydata).
+    In addition, each of the meshes can be assigned a material.
+    """
+    def __init__(self):
+        self.vertices    = []
+        self.faces       = []
+        self.materialIndices = [0]
+        self.materials   = []
+    
+    def add(self, verts, faces, material=None):
+        """Add new vertices and faces. If a material is given, it will be assigned to all the new faces."""
+        self.vertices, self.faces = mergeMeshPydata((self.vertices, self.faces), (verts, faces))
+        self.materialIndices.append(len(self.faces))
+        self.materials.append(material)
+    
+    def buildMesh(self, name):
+        """Create a Blender mesh from the previously added data."""
+        newMesh = bpy.data.meshes.new(name)
+        newMesh.from_pydata(self.vertices, [], self.faces)
+        newMesh.update()
+        
+        #assert False, (self.materialIndices, len(self.faces))
+        for mat, fromIdx, toIdx in zip(self.materials, self.materialIndices[:-1], self.materialIndices[1:]):
+            if mat is not None:
+                newMesh.materials.append(mat)
+                for p in range(fromIdx, toIdx):
+                    newMesh.polygons[p].material_index = len(newMesh.materials)-1
+        return newMesh
+
 def isIterable(val):
     try:
         iter(val)
