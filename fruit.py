@@ -106,14 +106,6 @@ class FruitProperties(FlowerResidueProps, StemProps):
         soft_min    = 0.2, soft_max     = 1
     )
     
-    symmetry = bpy.props.IntProperty(
-        name        = "Symmetry",
-        description = "The fruit will have this many bulges",
-        default     = 2,
-        min         = 0,
-        soft_max    = 10
-    )
-    
     upperAngle = bpy.props.FloatProperty(
         name        = "Upper angle",
         description = "How broad or narrow the fruit is at the top",
@@ -138,6 +130,29 @@ class FruitProperties(FlowerResidueProps, StemProps):
         subtype     = 'COLOR',
         default     = (0, 0, 0),
         min         = 0, max = 1
+    )
+    
+    grooves = bpy.props.IntProperty(
+        name        = "Grooves",
+        description = "The fruit will have this many grooves",
+        default     = 2,
+        min         = 0,
+        soft_max    = 10
+    )
+    
+    groovepower = bpy.props.FloatProperty(
+        name        = "Groove Shape",
+        description = "How sharp the grooves are",
+        default     = 1,
+        min         = 0,
+        soft_max    = 8
+    )
+    
+    grooveDepth = bpy.props.FloatProperty(
+        name        = "Groove Depth",
+        description = "How deep the grooves are. Expressed as relative offset around base radius, so negative values invert the grooves",
+        default     = .25,
+        soft_min    = -.5, soft_max    = .5
     )
     
 #############################################
@@ -190,6 +205,18 @@ class Fruit(Evolvable, FruitProperties):
         
         stem = HermiteInterpolator(x, y, dy)
         return bevelCircle(stem, radius, closeEnds=True)
+    
+    def _grooveFunction(self, angle):
+        def fib(x): # interpolated fibonacci
+            n = math.floor(x)
+            frac = x - n
+            arr = [1] + [2]*(n+1)
+            for i in range(2, n+2):
+                arr[i] = arr[i-2] + arr[i-1]
+            return (1-frac)*arr[n] + frac*arr[n+1]
+        
+        s = math.sin(self.grooves*angle/2)
+        return ( .5 - (abs(s))**fib(self.groovepower) ) * self.grooveDepth + 1
 
     def toMesh(self, LOD=16):
         """
@@ -200,7 +227,7 @@ class Fruit(Evolvable, FruitProperties):
         """
         
         mm = MeshMerger()
-        mm.add(*screw(self._outerSpline(), LODr=10, LODp=max(LOD, self.symmetry*4), rScale=lambda a: math.sin(self.symmetry*a)/4 + 1), 
+        mm.add(*screw(self._outerSpline(), LODr=LOD, LODp=max(LOD, self.grooves*4*max(2, int(self.groovepower))), rScale=self._grooveFunction), 
             makeDiffuseMaterial(self.colour))
         
         brown = [.12,.06,0] # use a fixed color for now
