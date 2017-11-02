@@ -1,7 +1,7 @@
-bl_info = { # TODO adapt to your project
-    "name": "Example Addon",
+bl_info = {
+    "name": "Procedural Fruit",
     "category": "Add Mesh",
-    "author": "Your Name",
+    "author": "Rafael",
     "version": (0, 0),
     }
 
