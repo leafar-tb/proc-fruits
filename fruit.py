@@ -90,14 +90,6 @@ class StemProps:
 
 class FruitProperties(FlowerResidueProps, StemProps):
         
-    #radius = bpy.props.FloatProperty(
-    #    name        = "Width",
-    #    description = "Width of the fruit",
-    #    default     = .2,
-    #    min         = 0,
-    #    soft_min    = 0.01, soft_max     = .5
-    #)
-    
     length = bpy.props.FloatProperty(
         name        = "Length",
         description = "Length of the fruit",
@@ -112,7 +104,15 @@ class FruitProperties(FlowerResidueProps, StemProps):
         subtype     = 'ANGLE',
         default     = 0,
         min         = -PI/2,
-        soft_max    = .375*PI
+        soft_min    = -.375*PI, soft_max    = .375*PI
+    )
+    
+    middleAngle = bpy.props.FloatProperty(
+        name        = "Middle Angle",
+        description = "Inclination at the girdle",
+        subtype     = 'ANGLE',
+        default     = 0,
+        soft_min    = -.125*PI, soft_max     = .125*PI
     )
     
     lowerAngle = bpy.props.FloatProperty(
@@ -121,6 +121,22 @@ class FruitProperties(FlowerResidueProps, StemProps):
         subtype     = 'ANGLE',
         default     = 0,
         soft_min    = -.375*PI, soft_max    = .375*PI,
+    )
+    
+    radius = bpy.props.FloatProperty(
+        name        = "Width",
+        description = "Horizontal radius of the fruit at the girdle",
+        default     = .1,
+        min         = 0,
+        soft_min    = 0.05, soft_max     = .2
+    )
+    
+    girdlePosition = bpy.props.FloatProperty(
+        name        = "Girdle Position",
+        description = "Relative positioning of the girdle along the length of the fruit",
+        default     = .6,
+        min         = .1, max = .9,
+        soft_min    = 0.4, soft_max     = .8
     )
     
     colour = bpy.props.FloatVectorProperty(
@@ -174,9 +190,11 @@ class Fruit(Evolvable, FruitProperties):
     def _outerSpline(self):
         def angle2Vec(a):
             return Vector((math.cos(a), 0, math.sin(a)))
-        x = 0, self.length
-        y = Vector((0, 0, self.length)), Vector((0, 0, 0))
-        dy = angle2Vec(self.upperAngle), angle2Vec(self.lowerAngle + PI)
+        
+        x = 0, self.length*self.girdlePosition, self.length
+        y = Vector((0, 0, self.length)), Vector((self.radius, 0, self.length*(1-self.girdlePosition))), Vector((0, 0, 0))
+        dy = angle2Vec(self.upperAngle), Vector((math.sin(self.middleAngle), 0, -math.cos(self.middleAngle))), angle2Vec(self.lowerAngle + PI)
+        
         return HermiteInterpolator(x, y, dy)
     
     def _makeFlowerResidue(self):
