@@ -5,7 +5,7 @@ import random
 
 from math import pi as PI
 from mathutils import Vector
-from .spline import HermiteInterpolator, screw, bevelCircle
+from .spline import HermiteInterpolator, Bezier, screw, bevelCircle, curvedScrew
 from .util import optional, makeDiffuseMaterial, MeshMerger, clip
 from .evolution import Evolvable
 from .notnum import linspace
@@ -171,6 +171,28 @@ class FruitProperties(FlowerResidueProps, StemProps):
         soft_min    = -.5, soft_max    = .5
     )
     
+    curved = bpy.props.BoolProperty(
+        name        = "Is Curved",
+        description = "Whether to apply the curve parameters",
+        default     = False
+    )
+    
+    curvePosVertical = bpy.props.FloatProperty(
+        name        = "Curve Height",
+        description = "Vertical position of the curvature",
+        default     = .5,
+        min         = 0, max = 1,
+        soft_min    = .1, soft_max = .9
+    )
+    
+    curveEccentricity = bpy.props.FloatProperty(
+        name        = "Curve Eccentricity",
+        description = "Intensity of curvature",
+        default     = 0,
+        min         = 0,
+        soft_max = .75
+    )
+    
 #############################################
 
 class Fruit(Evolvable, FruitProperties):
@@ -192,10 +214,15 @@ class Fruit(Evolvable, FruitProperties):
             return Vector((math.cos(a), 0, math.sin(a)))
         
         x = 0, self.length*self.girdlePosition, self.length
-        y = Vector((0, 0, self.length)), Vector((self.radius, 0, self.length*(1-self.girdlePosition))), Vector((0, 0, 0))
+        y = Vector((0, 0, 1)), Vector((self.radius, 0, (1-self.girdlePosition))), Vector((0, 0, 0))
         dy = angle2Vec(self.upperAngle), Vector((math.sin(self.middleAngle), 0, -math.cos(self.middleAngle))), angle2Vec(self.lowerAngle + PI)
         
         return HermiteInterpolator(x, y, dy)
+    
+    def _spine(self):
+        if not self.curved or self.curveEccentricity == 0:
+            return Bezier( (Vector(), Vector((0, 0, self.length))) ) 
+        return Bezier( (Vector(), Vector((self.curveEccentricity*self.length, 0, self.curvePosVertical*self.length)), Vector((0, 0, self.length))) ) 
     
     def _makeFlowerResidue(self):
         petals = self.fr_petals
@@ -207,19 +234,29 @@ class Fruit(Evolvable, FruitProperties):
         
         for i in range(1, petals):
             vtmp = [v.copy() for v in vertices[0:3]]
-            for v in vtmp: v.rotate( mathutils.Euler((0, 0, i*2*PI/petals)) )
+            for v in vtmp:
+                v.rotate( mathutils.Euler((0, 0, i*2*PI/petals)) )
             vertices.extend(vtmp)
+        for v in vertices:
+            v.rotate( Vector((0,0,1)).rotation_difference(self._spine().derive(1)(0)) )
+            v += self._spine()(self.fr_radius) # FIXME inaccurate
+        
         faces = [ (i, i+1, i+2) for i in range(0, 3*petals, 3)]
         return vertices, faces
 
     def _buildStem(self):
-        radius, zbase = self._outerSpline()(self.stem_radius).xz
+        radius = self._outerSpline()(self.stem_radius).x
+        zbase = self._spine()(1-self.stem_radius).z # FIXME inaccurate
         length = self.length*self.stem_length
+        zDir = self._spine().derive(1)(1-self.stem_radius).normalized()
+        bendDir = zDir.copy()
+        bendDir.rotate( mathutils.Quaternion(Vector((0,1,0)), PI/2) )
         
         x = 0, length
-        y = Vector((0, 0, zbase)), Vector((length*self.stem_bending, 0, zbase+length))
-        angle = clip(self.stem_bending, 0, 1)*PI/2 # at the upper stem
-        dy = Vector((0, 0, 1)), Vector((math.sin(angle), 0, math.cos(angle)))
+        #y = Vector((0, 0, zbase)), Vector((-length*self.stem_bending*2/3, 0, zbase)) + length*zDir
+        y = Vector((0, 0, zbase)), Vector((0, 0, zbase)) + length*zDir -bendDir*length*self.stem_bending*(1-self.curveEccentricity)
+        angle = clip(self.stem_bending, 0, 1)*PI/2*(1 + self.curveEccentricity/2) # at the upper stem
+        dy = zDir, Vector((-math.sin(angle), 0, math.cos(angle)))
         
         stem = HermiteInterpolator(x, y, dy)
         return bevelCircle(stem, radius, closeEnds=True)
@@ -245,7 +282,7 @@ class Fruit(Evolvable, FruitProperties):
         """
         
         mm = MeshMerger()
-        mm.add(*screw(self._outerSpline(), LODr=LOD, LODp=max(LOD, self.grooves*4*max(2, int(self.groovepower))), rScale=self._grooveFunction), 
+        mm.add(*curvedScrew(self._outerSpline(), self._spine(), LODr=LOD, LODp=max(LOD, self.grooves*4*max(2, int(self.groovepower))), rScale=self._grooveFunction), 
             makeDiffuseMaterial(self.colour))
         
         brown = [.12,.06,0] # use a fixed color for now
