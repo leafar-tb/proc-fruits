@@ -234,7 +234,10 @@ def bevelCircle(spline, radius, LODp=8, LODl=10, closeEnds=False):
         
         # a local, Frenet-like frame
         T, A = dsdx.to_3d(), dsdx2.to_3d()
-        N = T.cross(A).cross(T).normalized() if A.length > 0.0001 else T.orthogonal().normalized() # fallback, as with vanishing curvature the frame fails
+        if abs(T.angle(A, 0)%PI) > 0.0001: # A musn't be zero or parallel to T
+            N = T.cross(A).cross(T).normalized()
+        else: # fallback, as with vanishing curvature the frame fails
+            N = T.orthogonal().normalized()
         B = T.cross(N).normalized()
         # ... is used to add points in a circle
         vertices.extend( s.to_3d()+ (sin(phi)*N+cos(phi)*B)*r for phi in linspace(0, 2*PI, LODp, endpoint=False) )
@@ -281,6 +284,62 @@ def screw(spline, LODr, LODp, normalsDown=False, rScale=None):
             verts[v].rotate(mathutils.Euler(Vector((0, 0, angle))))
             if rScale is not None:
                 verts[v].xy *= rScale(angle) #*(v-i2)/LODr
+        faces.extend( (i1+f, i1+f+1, i2+f+1, i2+f)[::order] for f in range(LODr-1) )
+        i1 = i2
+    return verts, faces
+
+#############################################
+
+def curvedScrew(outline, spine, LODr, LODp, normalsDown=False, rScale=None):
+    """
+    Like screw(), creates a surface by rotating a spline around the z axis.
+    In addition, the surface is then bent along the spine.
+    The z values of the outline are mapped to the parameter space of the spine.
+    The vertices and face indices are returned.
+    outline, spine: 3d splines describing the desired surface
+    LODr: number of samples along the spline, i.e. 'rings'
+    LODp: number of 'spokes'
+    normalsDown: flag indicating, where normals should point (assumes the spline goes outward)
+    rScale: optional spline over [0,2*PI], giving a radial scale to apply at every angle
+    """
+    verts = []
+    faces = []
+    order = -1 if normalsDown else 1
+    if rScale is None:
+        rScale = lambda _: 1
+    
+    samples = outline.samples(LODr)
+    zSamples = [v.z for v in samples]
+    zSamplesSortedIds = [i[0] for i in sorted(enumerate(zSamples), key=lambda x:x[1])] # argsort
+
+    spine = spine.reparam(min(zSamples), max(zSamples))
+    
+    # local base at the start of the spline
+    spineDx = spine.derive(1)
+    baseZ = spineDx(spine.pmin)
+    baseX = baseZ.orthogonal().normalized()
+    #TODO could scale radius according to changed length; i.e. length(spine)/(zmax-zmin)
+    base = [ baseZ, baseX, baseZ.cross(baseX).normalized() ]
+
+    # the bases at each point are determined by iteratively moving a base along the sampled positions
+    bases = [None]*len(samples)
+    for zIdx in zSamplesSortedIds:
+        dsdx = spineDx(zSamples[zIdx])
+        rotation = base[0].rotation_difference(dsdx)
+        base[0] = dsdx
+        base[1].rotate(rotation)
+        base[2].rotate(rotation)
+        bases[zIdx] = [ v.copy() for v in base ]
+    
+    i1 = len(verts) + (LODp-1)*LODr # connect last and first line
+    for angle in linspace(0, 2*PI, LODp, endpoint=False):
+        i2 = len(verts)
+        for i, surfPoint in enumerate(samples):
+            spinePoint = spine(surfPoint.z)
+            # use local x and y axis to reconstruct point
+            verts.append( rScale(angle) * ( surfPoint.x*bases[i][1] + surfPoint.y*bases[i][2] ) )
+            verts[-1].rotate( mathutils.Quaternion(bases[i][0], angle) ) # rotate around local z axis
+            verts[-1] += spinePoint # move to correct position
         faces.extend( (i1+f, i1+f+1, i2+f+1, i2+f)[::order] for f in range(LODr-1) )
         i1 = i2
     return verts, faces
