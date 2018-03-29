@@ -3,6 +3,10 @@ This Blender plugin adds operators for creating procedural fruit meshes.
 The operators are explained in more detail below.
 To install the addon simply point Blender to a [zip](https://github.com/leafar-tb/proc-fruits/archive/master.zip) of this repo.
 
+<p align="center">
+  <img height="300px" src="https://raw.githubusercontent.com/leafar-tb/proc-fruits/master/images/procFruits3.png">
+</p>
+
 ## Installation and Usage
 If you are familiar with Blender, you can probably skip this.
 
@@ -23,13 +27,25 @@ Your changes to the settings are directly applied, so you can also play around w
 ## Generation
 Simply call the *Random Fruit* operator to generate some objects from random parameters.
 
+<p align="center">
+  <img width="80%" src="https://raw.githubusercontent.com/leafar-tb/proc-fruits/master/images/procFruits2.png">
+</p>
+
 ## Mutation
 When invoking the *Mutate Fruit* operator on a selected object a number of variations is produced based on it.
 The amount of change is controlled by a 'radiation' parameter.
 
+<p align="center">
+  <img height="300px" src="https://raw.githubusercontent.com/leafar-tb/proc-fruits/master/images/fruits-mutated.png">
+</p>
+
 ## Procreation
 The *Combine Fruit* operator allows you to merge the features of two or more selected objects.
 The features of the created objects are either inherited from one parent directly or averaged over the gene pool.
+
+<p align="center">
+  <img height="300px" src="https://raw.githubusercontent.com/leafar-tb/proc-fruits/master/images/fruits-combined.png">
+</p>
 
 ## Fine Tuning
 With the *Edit Fruit* operator you create a copy of an object and get to modify all of the parameters used in its generation.
