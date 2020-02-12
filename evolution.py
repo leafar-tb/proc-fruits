@@ -137,6 +137,7 @@ class Evolvable:
             else:
                 setattr(child, name, optionalKey(gene, name, prop['default']))
         return child
+
     
     @classmethod
     def registerOperators(cls):
@@ -154,8 +155,9 @@ class Evolvable:
             cls._combineOperator = combineOperator(cls,cls.label, cls.identifier)
         class EvPropGroup(bpy.types.PropertyGroup, cls):
             pass
-        
-        bpy.utils.register_class(EvPropGroup)
+        cls._EvPropGroup = EvPropGroup
+            
+        bpy.utils.register_class(cls._EvPropGroup)
         setattr(bpy.types.Object, cls.identifier, PointerProperty(type=EvPropGroup))
         bpy.utils.register_class(cls._generateOperator)
         bpy.utils.register_class(cls._mutationOperator)
@@ -165,7 +167,7 @@ class Evolvable:
     @classmethod
     def unregisterOperators(cls):
         delattr(bpy.types.Object, cls.identifier)
-        bpy.utils.unregister_class(EvPropGroup)
+        bpy.utils.unregister_class(cls._EvPropGroup)
         bpy.utils.unregister_class(cls._generateOperator)
         bpy.utils.unregister_class(cls._mutationOperator)
         bpy.utils.unregister_class(cls._editOperator)
@@ -212,7 +214,7 @@ def generateOperator(evolvable, label, identifier):
         bl_label = "Random "+label
         bl_options = {"REGISTER", "UNDO"}
 
-        count = IntProperty(
+        count : IntProperty(
             name="Count",
             description="How many "+label+"s to generate",
             default=4, min=1
@@ -237,13 +239,13 @@ def mutationOperator(evolvable, label, identifier):
         bl_label = "Mutate "+label
         bl_options = {"REGISTER", "UNDO"}
 
-        count = IntProperty(
+        count : IntProperty(
             name="Variations",
             description="How many different objects to generate from this one",
             default=4, min=1
         )
 
-        radiation = FloatProperty(
+        radiation : FloatProperty(
             name="Radiation",
             description="Strength of mutation",
             default=70, step=100,
@@ -291,7 +293,7 @@ def combineOperator(evolvable, label, identifier):
         bl_label = "Combine "+label+"s"
         bl_options = {"REGISTER", "UNDO"}
         
-        count = IntProperty(
+        count : IntProperty(
             name="Offspring",
             description="How many objects to generate",
             default=2, min=1
@@ -317,8 +319,9 @@ def mergeTypeInfo(propTuple):
     result["type"] = propTuple[0]
     return result
 
-def properties(props):
+def properties(propertyAnnotatedClass):
     """extract a dictionary mapping names to Blender properties (which are represented as dictionaries)"""
+    rawPropertiesDict = allAnnotations(propertyAnnotatedClass)
     return dict(
         # pack name and config dict together
         map( lambda p: (p[0], mergeTypeInfo(p[1])),
@@ -326,8 +329,15 @@ def properties(props):
             # type(bpy.props.*) is the same for all properties
             filter( lambda v: type(v[1]) is tuple and len(v[1]) == 2 and type(v[1][0]) is type(FloatProperty),
                 # get tuples (name, attribute value)
-                ( (n, getattr(props, n)) for n in dir(props) )
+                ( (n, rawPropertiesDict[n]) for n in rawPropertiesDict )
     )))
+
+def allAnnotations(propertyAnnotatedClass):
+    "Extract the annotations from the given class and all its base classes recursively."
+    propertyDict = getattr(propertyAnnotatedClass, '__annotations__', {})
+    for baseCls in propertyAnnotatedClass.__bases__:
+        propertyDict = {**allAnnotations(baseCls), **propertyDict}
+    return propertyDict
 
 def propClamp(value, prop, soft=False):
     ptype = prop["type"]

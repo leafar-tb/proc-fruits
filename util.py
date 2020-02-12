@@ -35,14 +35,18 @@ def optionalKey(obj, id, default=None, allowGetNone=False):
         return default
 
 def linkAndSelect(obj, context=bpy.context):
-    context.scene.objects.link(obj)
+    collection = bpy.data.collections.new("tmp")
+    context.scene.collection.children.link(collection)
+    collection.objects.link(obj)
+    
     bpy.ops.object.select_all(action = "DESELECT")
-    obj.select = True
-    context.scene.objects.active = obj
+    obj.select_set(state=True)
+    context.view_layer.objects.active = obj
 
 def makeDiffuseMaterial(col, name="Diffuse"):
+    col = col[:4]
     mat = bpy.data.materials.new(name)
-    mat.diffuse_color = col
+    mat.diffuse_color = tuple(col) + (1,) * (4 - len(col))
     mat.specular_intensity = 0
     return mat
 
