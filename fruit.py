@@ -94,7 +94,7 @@ class FruitProperties(FlowerResidueProps, StemProps):
         name        = "Length",
         description = "Length of the fruit",
         default     = .5,
-        min         = 0,
+        min         = 0.01,
         soft_min    = 0.2, soft_max     = 1
     )
 
@@ -226,6 +226,10 @@ class Fruit(Evolvable, FruitProperties):
 
     def _makeFlowerResidue(self):
         petals = self.fr_petals
+
+        if petals <= 0:
+            return [], []
+
         rPoint = self._outerSpline()((1-self.fr_radius)*self.length)
         vertices = [rPoint, rPoint.copy(), rPoint.copy() - Vector((0, 0, self.fr_length*self.length))]
         vertices[0].rotate(mathutils.Euler((0, 0, -PI/petals)))
@@ -248,6 +252,10 @@ class Fruit(Evolvable, FruitProperties):
         radius = self._outerSpline()(self.stem_radius).x
         zbase = self._spine()(1-self.stem_radius).z # FIXME inaccurate
         length = self.length*self.stem_length
+
+        if radius <= 0 or length <= 0:
+            return [], []
+
         zDir = self._spine().derive(1)(1-self.stem_radius).normalized()
         bendDir = zDir.copy()
         bendDir.rotate( mathutils.Quaternion(Vector((0,1,0)), PI/2) )
