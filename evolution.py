@@ -21,10 +21,10 @@ class Evolvable:
         props = properties(self.__class__)
         for name, params in props.items():
             setattr(self, name, params["default"])
-            
+
         for kw in kwargs:
             setattr(self, kw, propClamp(kwargs[kw], props[kw]))
-    
+
     def store(self, obj):
         """Store all properties of self into the given object. If obj is a dict, the properties are stored as key/value, otherwise as attributes."""
         for name in properties(self.__class__).keys():
@@ -36,7 +36,7 @@ class Evolvable:
     @classmethod
     def load(cls, obj):
         """Construct a new object from the values stored in a dict(via keys) or a general object(via attributes)."""
-        return cls(**dict( filter(lambda p: p[1] is not None, 
+        return cls(**dict( filter(lambda p: p[1] is not None,
             map(lambda n: (n, optionalKey(obj, n)), properties(cls).keys())) ))
 
     def toMeshObject(self, *args, **kwargs):
@@ -53,31 +53,31 @@ class Evolvable:
     def mutate(self, radiation):
         """mutate a new object from this one. parameter radiation must be positive and should not be larger than 100"""
         assert(radiation >= 0)
-        
+
         props = properties(self.__class__)
         nprops = len(props)
-        
+
         nmutations = clip(round(random.gauss(nprops*radiation/200, math.sqrt(nprops))), 1, nprops)
         mutatingProps = random.sample(props.items(), nmutations)
         radiation /= math.sqrt(nmutations) # the more aspects change, the less each of them changes
-        
+
         descendant = self.__class__.load(self)
         for name, params in mutatingProps:
             current = getattr(descendant, name)
             if params["type"] in (FloatVectorProperty, IntVectorProperty, BoolVectorProperty):
                 idx = random.randrange(params["size"]) # evolve only one entry of a vector
-            
+
             if params["type"] is BoolProperty:
                 newVal = (not current) if radiation/100 < random.random() else current
             elif params["type"] is BoolVectorProperty:
                 newVal = current.copy()
                 newVal[idx] = (not current[idx]) if radiation/100 < random.random() else current[idx]
-                
+
             elif params["type"] in (FloatProperty, FloatVectorProperty, IntProperty, IntVectorProperty):
                 dtype = float if params["type"] in (FloatProperty, FloatVectorProperty) else int
                 span = optionalKey(params, "soft_max", optionalKey(params, "max")) - optionalKey(params, "soft_min", optionalKey(params, "min"))
                 span *= radiation/100 # percent to factor
-                
+
                 def fuzzyClamp(val, curr): # clamp that allows flowing over soft min/max with some probability
                     val = propClamp(val, params)
                     # if val exceeds the soft bounds, chances decrease to go further away
@@ -98,9 +98,9 @@ class Evolvable:
                     newVal[idx] = fuzzyClamp(random.gauss(current[idx], span), current[idx])
             else:
                 raise Exception("Property type "+str(prop["type"])+" not supported.")
-            
+
             setattr(descendant, name, newVal)
-        
+
         return descendant
 
     @classmethod
@@ -123,7 +123,7 @@ class Evolvable:
                 elif prop["type"] in (BoolProperty, BoolVectorProperty):
                     # flip a coin if equally distributed, else take majority
                     dtype = lambda x: random.random() > .5 if x == .5 else x > .5
-                
+
                 if prop["type"] in (FloatVectorProperty, IntVectorProperty, BoolVectorProperty):
                     val = [0]*prop['size']
                     for i in range(prop['size']):
@@ -138,12 +138,12 @@ class Evolvable:
                 setattr(child, name, optionalKey(gene, name, prop['default']))
         return child
 
-    
+
     @classmethod
     def registerOperators(cls):
         assert cls.label and type(cls.label) is str, "a string label for the UI is required"
         assert cls.identifier and type(cls.identifier) is str, "a string identifier for the Blender IDs"
-        
+
         # check for None to allow setting custom generators and to avoid constructing them twice
         if optionalKey(cls, "_generateOperator") is None:
             cls._generateOperator = generateOperator(cls, cls.label, cls.identifier)
@@ -156,14 +156,31 @@ class Evolvable:
         class EvPropGroup(bpy.types.PropertyGroup, cls):
             pass
         cls._EvPropGroup = EvPropGroup
-            
+
+        class Menu(bpy.types.Menu):
+            bl_idname = "VIEW3D_MT_procedural_" + cls.identifier
+            bl_label = "Procedural " + cls.label
+
+            def draw(self, context):
+                layout = self.layout
+                self.layout.operator(cls._generateOperator.bl_idname)
+                self.layout.operator(cls._mutationOperator.bl_idname)
+                self.layout.operator(cls._editOperator.bl_idname)
+                self.layout.operator(cls._combineOperator.bl_idname)
+        cls._menu = Menu
+
+        bpy.utils.register_class(cls._menu)
         bpy.utils.register_class(cls._EvPropGroup)
         setattr(bpy.types.Object, cls.identifier, PointerProperty(type=EvPropGroup))
         bpy.utils.register_class(cls._generateOperator)
         bpy.utils.register_class(cls._mutationOperator)
         bpy.utils.register_class(cls._editOperator)
         bpy.utils.register_class(cls._combineOperator)
-    
+
+        def menu_func(self, context):
+            self.layout.menu(Menu.bl_idname)
+        bpy.types.VIEW3D_MT_add.append(menu_func)
+
     @classmethod
     def unregisterOperators(cls):
         delattr(bpy.types.Object, cls.identifier)
@@ -172,21 +189,22 @@ class Evolvable:
         bpy.utils.unregister_class(cls._mutationOperator)
         bpy.utils.unregister_class(cls._editOperator)
         bpy.utils.unregister_class(cls._combineOperator)
+        bpy.utils.unregister_class(cls._menu)
 
 #############################################
 
 class SimpleGenerator:
     """Generator for an Evolvable that just picks all parameters uniformly from their valid range."""
-    
+
     def __init__(self, evolvable):
         self.evolvable = evolvable
-    
+
     @staticmethod
     def randProp(prop):
         def pickUniform(prop):
             validRange = optionalKey(prop, "soft_max", optionalKey(prop, "max")), optionalKey(prop, "soft_min", optionalKey(prop, "min"))
             return random.uniform(*validRange)
-        
+
         if prop["type"] is FloatProperty:
             return pickUniform(prop)
         elif prop["type"] is IntProperty:
@@ -200,7 +218,7 @@ class SimpleGenerator:
         elif prop["type"] is BoolVectorProperty:
             return [ random.random() > .5 for _ in range(prop["size"]) ]
         raise Exception("Property type "+str(prop["type"])+" not supported.")
-    
+
     def __call__(self):
         return self.evolvable( **{
             name : SimpleGenerator.randProp(prop) for name, prop in properties(self.evolvable).items()
@@ -219,9 +237,9 @@ def generateOperator(evolvable, label, identifier):
             description="How many "+label+"s to generate",
             default=4, min=1
         )
-        
+
         generator = SimpleGenerator(evolvable)
-   
+
         def execute(self, context):
             for pos in range(-self.count//2, self.count//2):
                 newEvObj = self.generator()
@@ -270,12 +288,12 @@ def editOperator(evolvable, label, identifier):
         bl_idname = "mesh.edit_"+identifier
         bl_label = "Edit "+label
         bl_options = {"REGISTER", "UNDO"}
-        
+
         def invoke(self, context, event):
             if context.object is not None:
                 evolvable.load(getattr(context.object, identifier)).store(self)
             return self.execute(context)
-        
+
         def execute(self, context):
             evObj = evolvable.load(self)
             blObj = evObj.toMeshObject()
@@ -292,13 +310,13 @@ def combineOperator(evolvable, label, identifier):
         bl_idname = "mesh.combine_"+identifier
         bl_label = "Combine "+label+"s"
         bl_options = {"REGISTER", "UNDO"}
-        
+
         count : IntProperty(
             name="Offspring",
             description="How many objects to generate",
             default=2, min=1
         )
-        
+
         def execute(self, context):
             parents = [getattr(co, identifier) for co in context.selected_objects]
             for i in range(self.count):
@@ -341,10 +359,10 @@ def allAnnotations(propertyAnnotatedClass):
 
 def propClamp(value, prop, soft=False):
     ptype = prop["type"]
-    
+
     if ptype in (FloatProperty, FloatVectorProperty, IntProperty, IntVectorProperty):
         dtype = float if ptype in (FloatProperty, FloatVectorProperty) else int
-        
+
         # we might just clamp one entry of a vector property, so we need to check, whether an iterable was given
         if ptype in (FloatVectorProperty, IntVectorProperty) and isIterable(value):
             return [ propClamp(val, prop, soft) for val in value ]
@@ -353,13 +371,13 @@ def propClamp(value, prop, soft=False):
             minv = optionalKey(prop, "soft_min" if soft else "min", value)
             maxv = optionalKey(prop, "soft_max" if soft else "max", value)
             return clip(value, minv, maxv)
-    
+
     if ptype is BoolVectorProperty and isIterable(value):
         return [ bool(val) for val in value ]
     if ptype in (BoolProperty, BoolVectorProperty):
         return bool(value)
-    
+
     if ptype is StringProperty:
         return str(value)[:optionalKey(prop, "maxlen", -1)]
-    
+
     raise Exception("Property type "+str(ptype)+" not supported.")
