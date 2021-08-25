@@ -4,7 +4,6 @@ import math
 from .util import optional, optionalKey, clip, linkAndSelect, isIterable
 from bpy.props import *
 
-
 class Evolvable:
     """
     Base class for objects with evolvable properties. The properties need to be specified as bpy.props .
@@ -167,9 +166,11 @@ class Evolvable:
                 self.layout.operator(cls._mutationOperator.bl_idname)
                 self.layout.operator(cls._editOperator.bl_idname)
                 self.layout.operator(cls._combineOperator.bl_idname)
+
+            def menu_func(self, context):
+                self.layout.menu(Menu.bl_idname)
         cls._menu = Menu
 
-        bpy.utils.register_class(cls._menu)
         bpy.utils.register_class(cls._EvPropGroup)
         setattr(bpy.types.Object, cls.identifier, PointerProperty(type=EvPropGroup))
         bpy.utils.register_class(cls._generateOperator)
@@ -177,19 +178,20 @@ class Evolvable:
         bpy.utils.register_class(cls._editOperator)
         bpy.utils.register_class(cls._combineOperator)
 
-        def menu_func(self, context):
-            self.layout.menu(Menu.bl_idname)
-        bpy.types.VIEW3D_MT_add.append(menu_func)
+        bpy.utils.register_class(cls._menu)
+        bpy.types.VIEW3D_MT_add.append(cls._menu.menu_func)
 
     @classmethod
     def unregisterOperators(cls):
+        bpy.types.VIEW3D_MT_add.remove(cls._menu.menu_func)
+        bpy.utils.unregister_class(cls._menu)
+
         delattr(bpy.types.Object, cls.identifier)
         bpy.utils.unregister_class(cls._EvPropGroup)
         bpy.utils.unregister_class(cls._generateOperator)
         bpy.utils.unregister_class(cls._mutationOperator)
         bpy.utils.unregister_class(cls._editOperator)
         bpy.utils.unregister_class(cls._combineOperator)
-        bpy.utils.unregister_class(cls._menu)
 
 #############################################
 
