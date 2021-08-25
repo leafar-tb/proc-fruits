@@ -2,8 +2,8 @@ bl_info = {
     "name": "Procedural Fruit",
     "category": "Add Mesh",
     "author": "Rafael",
-    "version": (0, 0),
-    "blender": (2, 80, 0),
+    "version": (1, 0),
+    "blender": (2, 93, 0),
     }
 
 import bpy
@@ -12,7 +12,7 @@ from .fruit import Fruit
 
 def register():
     Fruit.registerOperators()
-    
+
 def unregister():
     Fruit.unregisterOperators()
 
