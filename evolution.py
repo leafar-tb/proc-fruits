@@ -334,9 +334,9 @@ def combineOperator(evolvable, label, identifier):
 # utils
 #############################################
 
-def mergeTypeInfo(propTuple):
-    result = propTuple[1].copy()
-    result["type"] = propTuple[0]
+def mergeTypeInfo(propType, keywords):
+    result = keywords.copy()
+    result["type"] = propType
     return result
 
 def properties(propertyAnnotatedClass):
@@ -344,10 +344,10 @@ def properties(propertyAnnotatedClass):
     rawPropertiesDict = allAnnotations(propertyAnnotatedClass)
     return dict(
         # pack name and config dict together
-        map( lambda p: (p[0], mergeTypeInfo(p[1])),
-            # pick those where the attribute value is a Blender Property tuple, i.e. has the form (property type, dict with config)
+        map( lambda p: (p[0], mergeTypeInfo(p[1].function, p[1].keywords)),
+            # pick those where the attribute value is a Blender _PropertyDeferred with .function and and .keywords
             # type(bpy.props.*) is the same for all properties
-            filter( lambda v: type(v[1]) is tuple and len(v[1]) == 2 and type(v[1][0]) is type(FloatProperty),
+            filter( lambda prop: type(getattr(prop[1], 'function', None)) is type(FloatProperty),
                 # get tuples (name, attribute value)
                 ( (n, rawPropertiesDict[n]) for n in rawPropertiesDict )
     )))
